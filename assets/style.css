@@ -1,0 +1,16 @@
+*{box-sizing:border-box}
+body{font-family:Tahoma,Arial,sans-serif;background:#f6f7fb;margin:0}
+.container{max-width:1100px;margin:0 auto;padding:16px}
+.nav{display:flex;align-items:center;justify-content:space-between;background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 2px 8px rgba(0,0,0,.06);margin-bottom:16px}
+.nav .brand{font-weight:bold}
+.nav ul{list-style:none;display:flex;gap:10px;margin:0;padding:0}
+.nav a{text-decoration:none;color:#222;padding:8px 12px;border-radius:8px}
+.nav a:hover{background:#eee}
+.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.form-row{display:flex;gap:10px;flex-wrap:wrap}
+.input{padding:10px;border:1px solid #ddd;border-radius:8px;width:100%}
+.btn{padding:10px 14px;border:0;border-radius:8px;background:#111;color:#fff;cursor:pointer}
+.btn.secondary{background:#666}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:8px;border-bottom:1px solid #eee;text-align:right}
+.footer{text-align:center;color:#666;margin-top:20px}
