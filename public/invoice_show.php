@@ -452,7 +452,12 @@ $change   = isset($inv['change_due'])  ? (float)$inv['change_due']  : null;
     </div>
     <div class="btn-group">
       <a href="/3zbawyh/public/dashboard.php" class="btn-small btn-light">الرجوع للوحة التحكم</a>
-      <button onclick="window.print()" class="btn-small btn-main">طباعة الفاتورة</button>
+<a href="/3zbawyh/public/invoice_print.php?id=<?= (int)$inv['id'] ?>"
+   class="btn-small btn-main"
+   target="_blank">
+  طباعة الفاتورة الحرارية
+</a>
+
     </div>
   </div>
 
