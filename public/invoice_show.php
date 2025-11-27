@@ -35,7 +35,6 @@ if (function_exists('table_exists')) {
 $itemsTable = null;
 foreach (['sales_items','invoice_items','sale_items','items_sold'] as $t){
   if (function_exists('table_exists') ? table_exists($db,$t) : true) {
-    // لو table_exists مش متاحة هنفترض أول اسم موجود
     try{
       $db->query("SELECT 1 FROM `$t` LIMIT 1");
       $itemsTable = $t; break;
@@ -63,17 +62,19 @@ $invPayMethod  = pick_col($invCols, ['payment_method']);
 $invPaidAmount = pick_col($invCols, ['paid_amount','amount_paid']);
 $invChangeDue  = pick_col($invCols, ['change_due','change']);
 $invPayRef     = pick_col($invCols, ['payment_ref','ref_no','reference']);
-$invPayNote    = pick_col($invCols, ['payment_note','note','notes']); // هنراعي عدم تخريب notes العامة
+$invPayNote    = pick_col($invCols, ['payment_note','note','notes']);
 
 if (!$invIdCol) { http_response_code(500); exit('لم يتم العثور على عمود معرف الفاتورة في جدول الفواتير.'); }
 
 /* أعمدة جدول البنود */
-$itemCols    = columns_of($db, $itemsTable);
-$itemFkCol   = pick_col($itemCols, ['sales_invoice_id','invoice_id','inv_id']);
-$itemNameCol = pick_col($itemCols, ['product_name','item_name','name','title','description']);
-$itemQtyCol  = pick_col($itemCols, ['quantity','qty','qte','amount','count']);
-$itemPriceCol= pick_col($itemCols, ['unit_price','price','sell_price','unitprice','rate']);
-$itemLineCol = pick_col($itemCols, ['line_total','total','subtotal','lineamount','amount_total']);
+$itemCols       = columns_of($db, $itemsTable);
+$itemFkCol      = pick_col($itemCols, ['sales_invoice_id','invoice_id','inv_id']);
+$itemNameCol    = pick_col($itemCols, ['product_name','item_name','name','title','description']);
+$itemQtyCol     = pick_col($itemCols, ['quantity','qty','qte','amount','count']);
+$itemPriceCol   = pick_col($itemCols, ['unit_price','price','sell_price','unitprice','rate']);
+$itemLineCol    = pick_col($itemCols, ['line_total','total','subtotal','lineamount','amount_total']);
+$itemItemFkCol  = pick_col($itemCols, ['item_id','product_id','items_id']); // الربط مع جدول items
+
 if (!$itemFkCol) { http_response_code(500); exit('لم يتم العثور على عمود الربط بالفاتورة داخل جدول البنود (invoice_id).'); }
 
 /* العملاء (اختياري) */
@@ -126,8 +127,32 @@ $st->execute([$id]);
 $inv = $st->fetch(PDO::FETCH_ASSOC);
 if (!$inv) { http_response_code(404); exit('الفاتورة غير موجودة'); }
 
+/* ========== تجهيز اسم المنتج من جدول items ========== */
+$itemsMasterTable = null;
+try{
+  $db->query("SELECT 1 FROM items LIMIT 1");
+  $itemsMasterTable = 'items';
+}catch(Throwable $e){
+  $itemsMasterTable = null;
+}
+
+/*
+  لو جدول items موجود ومعانا عمود الربط (item_id / product_id / items_id)
+  هنجيب الاسم من items.name، ولو مش موجود نرجع للاسم الموجود في جدول البنود أو "بند #"
+*/
+$itemsJoin = "";
+if ($itemsMasterTable && $itemItemFkCol) {
+  $baseNameExpr = $itemNameCol
+    ? "$itAlias.`$itemNameCol`"
+    : "CONCAT('بند #', $itAlias.id)";
+  $nameExpr = "COALESCE(i.name, $baseNameExpr)";
+  $itemsJoin = "LEFT JOIN `$itemsMasterTable` i ON i.id = $itAlias.`$itemItemFkCol`";
+} else {
+  $nameExpr = $itemNameCol ? "$itAlias.`$itemNameCol`" : "CONCAT('بند #', $itAlias.id)";
+  $itemsJoin = "";
+}
+
 /* ========== جلب البنود ========== */
-$nameExpr = $itemNameCol ? "$itAlias.`$itemNameCol`" : "CONCAT('بند #', $itAlias.id)";
 $sqlItems = "
   SELECT
     $itAlias.id,
@@ -136,6 +161,7 @@ $sqlItems = "
     ".($itemPriceCol ? "$itAlias.`$itemPriceCol`" : "0")."  AS unit_price,
     $lineExpr AS line_total
   FROM `$itemsTable` $itAlias
+  $itemsJoin
   WHERE $itAlias.`$itemFkCol` = ?
   ORDER BY $itAlias.id ASC
 ";
@@ -225,124 +251,386 @@ $change   = isset($inv['change_due'])  ? (float)$inv['change_due']  : null;
   <meta charset="utf-8">
   <title>فاتورة #<?=e2($inv['invoice_no'] ?? $inv['id'])?></title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- نفس ستايل السيستم العام -->
+  <link rel="stylesheet" href="/3zbawyh/public/style.css">
+
   <style>
-    body{background:#f6f7fb;color:#111;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Naskh Arabic",Tahoma,Arial}
-    .container{max-width:900px;margin:20px auto;padding:16px}
-    .card{background:#fff;border:1px solid #eee;border-radius:14px;padding:14px;margin-bottom:12px}
-    .table{width:100%;border-collapse:separate;border-spacing:0 8px}
-    .table th{font-size:13px;color:#6b7280;text-align:right}
-    .table td,.table th{padding:8px 10px;background:#fff}
-    .row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-    .btn{display:inline-block;background:#111;color:#fff;border:none;padding:10px 12px;border-radius:10px;text-decoration:none}
-    .muted{color:#6b7280}
-    .pill{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid #e5e7eb;background:#f8fafc;font-size:12px}
-    .grid{display:grid;gap:10px}
-    @media(min-width:820px){.cols-2{grid-template-columns:1fr 1fr}}
+    body{
+      background:#f3f4f6;
+      color:#111827;
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Naskh Arabic","Tahoma",sans-serif;
+    }
+    .invoice-wrapper{
+      max-width:960px;
+      margin:24px auto;
+    }
+    .top-bar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:16px;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .top-bar-left{
+      font-weight:bold;
+      font-size:18px;
+      color:#111827;
+    }
+    .btn-group{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .btn-small{
+      padding:8px 12px;
+      border-radius:8px;
+      border:0;
+      cursor:pointer;
+      font-size:14px;
+      text-decoration:none;
+      display:inline-block;
+    }
+    .btn-main{
+      background:#111827;
+      color:#fff;
+    }
+    .btn-light{
+      background:#e5e7eb;
+      color:#111827;
+    }
+
+    .invoice-card{
+      background:#fff;
+      border-radius:14px;
+      padding:18px 20px;
+      box-shadow:0 2px 8px rgba(15,23,42,.06);
+      margin-bottom:14px;
+    }
+
+    .invoice-header-grid{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:space-between;
+      gap:16px;
+    }
+    .box{
+      flex:1;
+      min-width:260px;
+    }
+    .label{
+      font-size:12px;
+      color:#6b7280;
+      margin-bottom:2px;
+    }
+    .value{
+      font-size:15px;
+      font-weight:600;
+      color:#111827;
+    }
+    .invoice-title{
+      font-size:22px;
+      margin-bottom:6px;
+      font-weight:700;
+    }
+    .invoice-subline{
+      font-size:13px;
+      color:#6b7280;
+    }
+
+    .section-title{
+      font-size:15px;
+      font-weight:700;
+      margin-bottom:10px;
+      color:#111827;
+    }
+
+    table.items-table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:14px;
+    }
+    .items-table thead{
+      background:#f9fafb;
+      border-bottom:1px solid #e5e7eb;
+    }
+    .items-table th{
+      padding:10px 8px;
+      color:#6b7280;
+      font-weight:600;
+      text-align:right;
+      white-space:nowrap;
+    }
+    .items-table td{
+      padding:8px 8px;
+      border-bottom:1px solid #f3f4f6;
+      vertical-align:middle;
+    }
+    .items-table tbody tr:nth-child(even){
+      background:#f9fafb;
+    }
+    .items-table .num{
+      text-align:left;
+      white-space:nowrap;
+    }
+    .items-table tfoot td{
+      background:#f9fafb;
+      font-weight:600;
+    }
+
+    .summary-lines{
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+      font-size:14px;
+    }
+    .summary-line{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .summary-line span:first-child{
+      color:#4b5563;
+    }
+
+    .two-column{
+      display:flex;
+      flex-wrap:wrap;
+      gap:12px;
+      margin-top:10px;
+    }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:3px 10px;
+      border-radius:999px;
+      background:#f3f4ff;
+      color:#1d4ed8;
+      font-size:12px;
+      font-weight:500;
+    }
+
+    .note-box{
+      margin-top:10px;
+      padding:10px 12px;
+      border-radius:10px;
+      background:#f9fafb;
+      font-size:13px;
+      color:#374151;
+      max-height:120px;
+      overflow:auto;
+    }
+
+    .text-muted{
+      color:#9ca3af;
+      font-size:12px;
+      margin-top:6px;
+    }
+
+    @media print{
+      .top-bar{display:none}
+      body{background:#fff;}
+      .invoice-wrapper{margin:0;padding:0;max-width:100%;}
+      .invoice-card{
+        box-shadow:none;
+        border:1px solid #e5e7eb;
+        border-radius:0;
+      }
+    }
   </style>
 </head>
 <body>
-<div class="container">
+<div class="invoice-wrapper">
 
-  <div class="row">
-    <a class="btn" href="/3zbawyh/public/dashboard.php">رجوع</a>
-    <a class="btn" href="javascript:window.print()">طباعة</a>
-  </div>
-
-  <div class="card">
-    <h2 style="margin:0">فاتورة #<?=e2($inv['invoice_no'] ?? $inv['id'])?></h2>
-    <div class="muted">
-      العميل: <?=e2($inv['customer_name'] ?? 'عميل نقدي')?> —
-      التاريخ: <?=e2($created_at_text)?>
+  <!-- شريط علوي -->
+  <div class="top-bar">
+    <div class="top-bar-left">
+      نظام المبيعات - عرض فاتورة
+    </div>
+    <div class="btn-group">
+      <a href="/3zbawyh/public/dashboard.php" class="btn-small btn-light">الرجوع للوحة التحكم</a>
+      <button onclick="window.print()" class="btn-small btn-main">طباعة الفاتورة</button>
     </div>
   </div>
 
-  <div class="card">
-    <table class="table" dir="rtl">
-      <thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead>
+  <!-- الهيدر الرئيسي -->
+  <div class="invoice-card">
+    <div class="invoice-header-grid">
+      <div class="box">
+        <div class="invoice-title">
+          فاتورة #<?=e2($inv['invoice_no'] ?? $inv['id'])?>
+        </div>
+        <div class="invoice-subline">
+          عميل: <strong><?=e2($inv['customer_name'] ?? 'عميل نقدي')?></strong>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="label">تاريخ الفاتورة</div>
+        <div class="value"><?=e2($created_at_text)?></div>
+
+        <div class="label" style="margin-top:8px;">المبلغ الإجمالي</div>
+        <div class="value"><?=nf($totalDisplay)?> جنيه</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- تفاصيل الأصناف -->
+  <div class="invoice-card">
+    <div class="section-title">تفاصيل الأصناف</div>
+    <table class="items-table">
+      <thead>
+      <tr>
+        <th>الصنف</th>
+        <th style="width:80px;">الكمية</th>
+        <th style="width:120px;">سعر الوحدة</th>
+        <th style="width:130px;">الإجمالي</th>
+      </tr>
+      </thead>
       <tbody>
-        <?php foreach ($items as $it): ?>
-          <tr>
-            <td><?=e2($it['product_name'])?></td>
-            <td><?=nf($it['quantity'])?></td>
-            <td><?=nf($it['unit_price'])?> EGP</td>
-            <td><?=nf($it['line_total'])?> EGP</td>
-          </tr>
-        <?php endforeach; ?>
+      <?php foreach ($items as $it): ?>
+        <tr>
+          <td><?=e2($it['product_name'])?></td>
+          <td class="num"><?=nf($it['quantity'])?></td>
+          <td class="num"><?=nf($it['unit_price'])?> جنيه</td>
+          <td class="num"><?=nf($it['line_total'])?> جنيه</td>
+        </tr>
+      <?php endforeach; ?>
       </tbody>
       <tfoot>
-        <?php if ($subtotal !== null): ?>
-          <tr><td colspan="3" style="text-align:left">المجموع قبل الخصم/الضريبة</td><td><?=nf($subtotal)?> EGP</td></tr>
-        <?php endif; ?>
-        <?php if ($discount !== null): ?>
-          <tr><td colspan="3" style="text-align:left">خصم</td><td><?=nf($discount)?> EGP</td></tr>
-        <?php endif; ?>
-        <?php if ($tax !== null): ?>
-          <tr><td colspan="3" style="text-align:left">ضريبة</td><td><?=nf($tax)?> EGP</td></tr>
-        <?php endif; ?>
+      <?php if ($subtotal !== null): ?>
         <tr>
-          <td colspan="3" style="text-align:left"><strong>الإجمالي</strong></td>
-          <td><strong><?=nf($totalDisplay)?> EGP</strong></td>
+          <td colspan="3">المجموع قبل الخصم والضريبة</td>
+          <td class="num"><?=nf($subtotal)?> جنيه</td>
         </tr>
+      <?php endif; ?>
+      <?php if ($discount !== null): ?>
+        <tr>
+          <td colspan="3">الخصم</td>
+          <td class="num"><?=nf($discount)?> جنيه</td>
+        </tr>
+      <?php endif; ?>
+      <?php if ($tax !== null): ?>
+        <tr>
+          <td colspan="3">الضريبة</td>
+          <td class="num"><?=nf($tax)?> جنيه</td>
+        </tr>
+      <?php endif; ?>
+      <tr>
+        <td colspan="3">الإجمالي النهائي</td>
+        <td class="num"><?=nf($totalDisplay)?> جنيه</td>
+      </tr>
       </tfoot>
     </table>
   </div>
 
-  <div class="grid cols-2">
-    <div class="card">
-      <h3 style="margin:4px 0 10px">بيانات الدفع</h3>
-      <div class="muted" style="margin-bottom:6px">
-        طريقة الدفع: <span class="pill"><?= e2($pm !== '' ? $pm : '—') ?></span>
-        <?php if ($ref !== ''): ?>
-          &nbsp; مرجع: <span class="pill"><?= e2($ref) ?></span>
+  <!-- بيانات الدفع + التوزيع -->
+  <div class="two-column">
+    <!-- بيانات الدفع -->
+    <div class="invoice-card" style="flex:1;min-width:280px;">
+      <div class="section-title">بيانات الدفع</div>
+
+      <div class="summary-lines">
+        <div class="summary-line">
+          <span>طريقة الدفع:</span>
+          <span class="badge"><?= e2($pm !== '' ? $pm : 'غير محدد') ?></span>
+        </div>
+
+        <?php if ($ref): ?>
+        <div class="summary-line">
+          <span>مرجع الدفع:</span>
+          <span><?= e2($ref) ?></span>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($paidAmt !== null): ?>
+        <div class="summary-line">
+          <span>المبلغ المدفوع:</span>
+          <span><?= nf($paidAmt) ?> جنيه</span>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($change !== null): ?>
+        <div class="summary-line">
+          <span>الباقي للعميل:</span>
+          <span><?= nf($change) ?> جنيه</span>
+        </div>
         <?php endif; ?>
       </div>
 
-      <?php if ($paidAmt !== null || $change !== null): ?>
-        <div class="muted" style="margin-bottom:6px">
-          <?php if ($paidAmt !== null): ?>المدفوع: <strong><?=nf($paidAmt)?></strong> EGP<?php endif; ?>
-          <?php if ($change !== null): ?>&nbsp; | &nbsp; الباقي (كاش): <strong><?=nf($change)?></strong> EGP<?php endif; ?>
-        </div>
+      <?php if ($note !== ''): ?>
+      <div class="label" style="margin-top:12px;">ملاحظات الدفع</div>
+      <div class="note-box">
+        <?= nl2br(e2($note)) ?>
+      </div>
       <?php endif; ?>
 
-      <?php if ($note !== ''): ?>
-        <div><strong>ملاحظة الدفع:</strong> <?= nl2br(e2($note)) ?></div>
-      <?php endif; ?>
+      <div class="text-muted">
+        هذه البيانات خاصة بطريقة سداد الفاتورة، لمراجعة الكاشير أو الإدارة.
+      </div>
     </div>
 
-    <div class="card">
-      <h3 style="margin:4px 0 10px">توزيع المبالغ حسب الطريقة</h3>
-      <table class="table" dir="rtl">
-        <thead><tr><th>الطريقة</th><th>المبلغ</th></tr></thead>
+    <!-- توزيع المبلغ -->
+    <div class="invoice-card" style="flex:1;min-width:280px;">
+      <div class="section-title">توزيع المبلغ على وسائل الدفع</div>
+
+      <table class="items-table">
         <tbody>
-          <tr><td>Cash</td><td><?=nf($byMethod['cash'])?> EGP</td></tr>
-          <tr><td>Visa</td><td><?=nf($byMethod['visa'])?> EGP</td></tr>
-          <tr><td>InstaPay</td><td><?=nf($byMethod['instapay'])?> EGP</td></tr>
-          <tr><td>Vodafone Cash</td><td><?=nf($byMethod['vodafone_cash'])?> EGP</td></tr>
-          <tr><td>آجل</td><td><?=nf($byMethod['agel'])?> EGP</td></tr>
-          <?php if ($byMethod['other'] > 0.0001): ?>
-            <tr><td>أخرى</td><td><?=nf($byMethod['other'])?> EGP</td></tr>
-          <?php endif; ?>
+        <tr>
+          <td>نقدي (Cash)</td>
+          <td class="num"><?=nf($byMethod['cash'])?> جنيه</td>
+        </tr>
+        <tr>
+          <td>Visa</td>
+          <td class="num"><?=nf($byMethod['visa'])?> جنيه</td>
+        </tr>
+        <tr>
+          <td>InstaPay</td>
+          <td class="num"><?=nf($byMethod['instapay'])?> جنيه</td>
+        </tr>
+        <tr>
+          <td>Vodafone Cash</td>
+          <td class="num"><?=nf($byMethod['vodafone_cash'])?> جنيه</td>
+        </tr>
+        <tr>
+          <td>آجل </td>
+          <td class="num"><?=nf($byMethod['agel'])?> جنيه</td>
+        </tr>
+        <?php if ($byMethod['other'] > 0.0001): ?>
+        <tr>
+          <td>طرق أخرى</td>
+          <td class="num"><?=nf($byMethod['other'])?> جنيه</td>
+        </tr>
+        <?php endif; ?>
         </tbody>
         <tfoot>
-          <tr>
-            <td style="text-align:left"><strong>إجمالي موزّع</strong></td>
-            <td><strong>
-              <?php
-                $distSum = array_sum($byMethod);
-                echo nf($distSum), ' EGP';
-              ?>
-            </strong></td>
-          </tr>
+        <tr>
+          <td>إجمالي الموزع</td>
+          <td class="num">
+            <?php $distSum = array_sum($byMethod); ?>
+            <?=nf($distSum)?> جنيه
+          </td>
+        </tr>
         </tfoot>
       </table>
+
       <?php
-      // تنبيه بسيط لو الإجمالي الموزّع مختلف عن إجمالي الفاتورة
       $distSum = array_sum($byMethod);
       if (abs($distSum - $totalDisplay) > 0.01):
       ?>
-        <div class="muted">* تنبيه: إجمالي التوزيع (<?=nf($distSum)?>) لا يساوي إجمالي الفاتورة (<?=nf($totalDisplay)?>). قد تكون الملاحظة ناقصة.</div>
+      <div class="text-muted">
+        * ملاحظة: إجمالي التوزيع (<?=nf($distSum)?>) لا يساوي إجمالي الفاتورة (<?=nf($totalDisplay)?>).  
+        قد تكون بيانات التوزيع ناقصة أو تم التعديل يدويًا.
+      </div>
       <?php endif; ?>
     </div>
+  </div>
+
+  <div style="text-align:center;margin-top:18px;font-size:12px;color:#9ca3af;">
+    شكرًا لتعاملكم معنا 🌟
   </div>
 
 </div>

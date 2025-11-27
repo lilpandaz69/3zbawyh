@@ -62,14 +62,17 @@ function save_uploaded_image(array $file, string $uploadDir, string $uploadUrl):
 $hasItems       = table_exists($db,'items');
 $hasCategories  = table_exists($db,'categories');
 $hasSubcatsTbl  = table_exists($db,'subcategories');
+$hasSubSubTbl   = table_exists($db,'sub_subcategories');
 if(!$hasItems){ die('جدول items غير موجود.'); }
 
 $hasSKU         = has_col($db,'items','sku');
 $hasPrice       = has_col($db,'items','unit_price');
+$hasWholesale   = has_col($db,'items','price_wholesale');   // ✅ سعر القطاعي/الجملة
 $hasReorder     = has_col($db,'items','reorder_level');
 $hasStock       = has_col($db,'items','stock');
-$hasCatId       = has_col($db,'items','category_id') && $hasCategories;
-$hasSubcatId    = has_col($db,'items','subcategory_id') && $hasSubcatsTbl;
+$hasCatId       = has_col($db,'items','category_id')        && $hasCategories;
+$hasSubcatId    = has_col($db,'items','subcategory_id')     && $hasSubcatsTbl;
+$hasSubSubId    = has_col($db,'items','sub_subcategory_id') && $hasSubSubTbl;
 $hasImage       = has_col($db,'items','image_url'); // عمود الصورة
 
 /** AJAX: جلب التصنيفات الفرعية حسب التصنيف */
@@ -79,6 +82,21 @@ if(($_GET['ajax'] ?? '')==='subcats' && $hasSubcatsTbl){
   if($cid>0){
     $rows = $db->prepare("SELECT id,name FROM subcategories WHERE category_id=? AND (is_active=1 OR is_active IS NULL) ORDER BY name");
     $rows->execute([$cid]);
+    echo json_encode($rows->fetchAll(PDO::FETCH_ASSOC));
+  } else {
+    echo json_encode([]);
+  }
+  exit;
+}
+
+/** AJAX: جلب sub-sub حسب الفرعي */
+if(($_GET['ajax'] ?? '')==='subsub' && $hasSubSubTbl){
+  header('Content-Type: application/json; charset=utf-8');
+  $sid = (int)($_GET['subcategory_id'] ?? 0);
+  if($sid>0){
+    // لو is_active مش موجود مش مشكلة، الشرط هيعدي
+    $rows = $db->prepare("SELECT id,name FROM sub_subcategories WHERE subcategory_id=? AND (is_active=1 OR is_active IS NULL) ORDER BY name");
+    $rows->execute([$sid]);
     echo json_encode($rows->fetchAll(PDO::FETCH_ASSOC));
   } else {
     echo json_encode([]);
@@ -108,14 +126,32 @@ try{
 
     $fields=['name']; $vals=[trim($_POST['name'])]; $qs=['?'];
 
-    if($hasSKU){     $fields[]='sku';           $vals[] = trim($_POST['sku'] ?? '') ?: null; $qs[]='?'; }
-    if($hasPrice){   $fields[]='unit_price';    $vals[] = (trim($_POST['unit_price'] ?? '')!=='')? trim($_POST['unit_price']) : null; $qs[]='?'; }
-    if($hasReorder){ $fields[]='reorder_level'; $vals[] = (int)($_POST['reorder_level'] ?? 0); $qs[]='?'; }
-    if($hasStock){   $fields[]='stock';         $vals[] = (int)($_POST['stock'] ?? 0); $qs[]='?'; }
-    if($hasImage){   $fields[]='image_url';     $vals[] = $newImageUrl; $qs[]='?'; }
+    if($hasSKU){
+      $fields[]='sku'; $vals[] = trim($_POST['sku'] ?? '') ?: null; $qs[]='?';
+    }
+    if($hasPrice){
+      $fields[]='unit_price';
+      $vals[] = (trim($_POST['unit_price'] ?? '')!=='')? trim($_POST['unit_price']) : null; $qs[]='?';
+    }
+    if($hasWholesale){
+      $fields[]='price_wholesale';
+      $vals[] = (trim($_POST['price_wholesale'] ?? '')!=='')? trim($_POST['price_wholesale']) : 0; $qs[]='?';
+    }
+    if($hasReorder){
+      $fields[]='reorder_level'; $vals[] = (int)($_POST['reorder_level'] ?? 0); $qs[]='?';
+    }
+    if($hasStock){
+      $fields[]='stock'; $vals[] = (int)($_POST['stock'] ?? 0); $qs[]='?';
+    }
+    if($hasImage){
+      $fields[]='image_url'; $vals[] = $newImageUrl; $qs[]='?';
+    }
 
-    $catId = null; $subId = null;
-    if($hasCatId){ $catId = ($_POST['category_id']!=='')? (int)$_POST['category_id'] : null; $fields[]='category_id'; $vals[]=$catId; $qs[]='?'; }
+    $catId = null; $subId = null; $subSubId = null;
+    if($hasCatId){
+      $catId = ($_POST['category_id']!=='')? (int)$_POST['category_id'] : null;
+      $fields[]='category_id'; $vals[]=$catId; $qs[]='?';
+    }
     if($hasSubcatId){
       $tmpSub = ($_POST['subcategory_id']!=='')? (int)$_POST['subcategory_id'] : null;
       if($tmpSub && $catId){
@@ -124,6 +160,15 @@ try{
         if($ok->fetchColumn()){ $subId=$tmpSub; }
       }
       $fields[]='subcategory_id'; $vals[]=$subId; $qs[]='?';
+    }
+    if($hasSubSubId){
+      $tmpSubSub = ($_POST['sub_subcategory_id']!=='')? (int)$_POST['sub_subcategory_id'] : null;
+      if($tmpSubSub && $subId){
+        $ok=$db->prepare("SELECT 1 FROM sub_subcategories WHERE id=? AND subcategory_id=?");
+        $ok->execute([$tmpSubSub,$subId]);
+        if($ok->fetchColumn()){ $subSubId=$tmpSubSub; }
+      }
+      $fields[]='sub_subcategory_id'; $vals[]=$subSubId; $qs[]='?';
     }
 
     $sql="INSERT INTO items (".implode(',',$fields).") VALUES (".implode(',',$qs).")";
@@ -150,10 +195,23 @@ try{
 
     $sets=['name=?']; $vals=[trim($_POST['name'])];
 
-    if($hasSKU){     $sets[]='sku=?';           $vals[] = trim($_POST['sku'] ?? '') ?: null; }
-    if($hasPrice){   $sets[]='unit_price=?';    $vals[] = (trim($_POST['unit_price'] ?? '')!=='')? trim($_POST['unit_price']) : null; }
-    if($hasReorder){ $sets[]='reorder_level=?'; $vals[] = (int)($_POST['reorder_level'] ?? 0); }
-    if($hasStock){   $sets[]='stock=?';         $vals[] = (int)($_POST['stock'] ?? 0); }
+    if($hasSKU){
+      $sets[]='sku=?'; $vals[] = trim($_POST['sku'] ?? '') ?: null;
+    }
+    if($hasPrice){
+      $sets[]='unit_price=?';
+      $vals[] = (trim($_POST['unit_price'] ?? '')!=='')? trim($_POST['unit_price']) : null;
+    }
+    if($hasWholesale){
+      $sets[]='price_wholesale=?';
+      $vals[] = (trim($_POST['price_wholesale'] ?? '')!=='')? trim($_POST['price_wholesale']) : 0;
+    }
+    if($hasReorder){
+      $sets[]='reorder_level=?'; $vals[] = (int)($_POST['reorder_level'] ?? 0);
+    }
+    if($hasStock){
+      $sets[]='stock=?'; $vals[] = (int)($_POST['stock'] ?? 0);
+    }
 
     // منطق الصورة
     if($hasImage){
@@ -173,8 +231,13 @@ try{
       }
     }
 
-    $catId = null; $subId = null;
-    if($hasCatId){ $sets[]='category_id=?'; $catId = ($_POST['category_id']!=='')? (int)$_POST['category_id'] : null; $vals[]=$catId; }
+    // كاتيجوري / فرعي / فرعي فرعي
+    $catId = null; $subId = null; $subSubId = null;
+
+    if($hasCatId){
+      $catId = ($_POST['category_id']!=='')? (int)$_POST['category_id'] : null;
+      $sets[]='category_id=?'; $vals[]=$catId;
+    }
     if($hasSubcatId){
       $tmpSub = ($_POST['subcategory_id']!=='')? (int)$_POST['subcategory_id'] : null;
       if($tmpSub && $catId){
@@ -183,6 +246,15 @@ try{
         if($ok->fetchColumn()){ $subId=$tmpSub; }
       }
       $sets[]='subcategory_id=?'; $vals[]=$subId;
+    }
+    if($hasSubSubId){
+      $tmpSubSub = ($_POST['sub_subcategory_id']!=='')? (int)$_POST['sub_subcategory_id'] : null;
+      if($tmpSubSub && $subId){
+        $ok=$db->prepare("SELECT 1 FROM sub_subcategories WHERE id=? AND subcategory_id=?");
+        $ok->execute([$tmpSubSub,$subId]);
+        if($ok->fetchColumn()){ $subSubId=$tmpSubSub; }
+      }
+      $sets[]='sub_subcategory_id=?'; $vals[]=$subSubId;
     }
 
     $vals[]=$id;
@@ -204,23 +276,26 @@ try{
 } catch(Throwable $e){ $err=$e->getMessage(); }
 
 /** Filters */
-$q   = trim($_GET['q'] ?? '');
-$cat = ($hasCatId && isset($_GET['category_id']) && $_GET['category_id']!=='') ? (int)$_GET['category_id'] : null;
-$sub = ($hasSubcatId && isset($_GET['subcategory_id']) && $_GET['subcategory_id']!=='') ? (int)$_GET['subcategory_id'] : null;
+$q       = trim($_GET['q'] ?? '');
+$cat     = ($hasCatId    && isset($_GET['category_id'])       && $_GET['category_id']!=='')        ? (int)$_GET['category_id']       : null;
+$sub     = ($hasSubcatId && isset($_GET['subcategory_id'])    && $_GET['subcategory_id']!=='')     ? (int)$_GET['subcategory_id']    : null;
+$subsub  = ($hasSubSubId && isset($_GET['sub_subcategory_id'])&& $_GET['sub_subcategory_id']!=='') ? (int)$_GET['sub_subcategory_id']: null;
 
 /** List query */
 $select = "i.*";
 $join   = "";
-if($hasCatId){    $select.=", c.name AS category_name";     $join.=" LEFT JOIN categories c ON c.id=i.category_id "; }
-if($hasSubcatId){ $select.=", s.name AS subcategory_name";  $join.=" LEFT JOIN subcategories s ON s.id=i.subcategory_id "; }
+if($hasCatId){    $select.=", c.name AS category_name";      $join.=" LEFT JOIN categories c ON c.id=i.category_id "; }
+if($hasSubcatId){ $select.=", s.name AS subcategory_name";   $join.=" LEFT JOIN subcategories s ON s.id=i.subcategory_id "; }
+if($hasSubSubId){ $select.=", ss.name AS sub_subcategory_name"; $join.=" LEFT JOIN sub_subcategories ss ON ss.id=i.sub_subcategory_id "; }
 
 $where="1"; $params=[];
 if($q!==''){
   $where.=" AND (i.name LIKE ?".($hasSKU?" OR i.sku LIKE ?":"").")";
   $params[]="%$q%"; if($hasSKU){ $params[]="%$q%"; }
 }
-if($cat!==null && $hasCatId){ $where.=" AND i.category_id=?"; $params[]=$cat; }
-if($sub!==null && $hasSubcatId){ $where.=" AND i.subcategory_id=?"; $params[]=$sub; }
+if($cat!==null && $hasCatId){ $where.=" AND i.category_id=?";        $params[]=$cat; }
+if($sub!==null && $hasSubcatId){ $where.=" AND i.subcategory_id=?";  $params[]=$sub; }
+if($subsub!==null && $hasSubSubId){ $where.=" AND i.sub_subcategory_id=?"; $params[]=$subsub; }
 
 $sqlList = "SELECT $select FROM items i $join WHERE $where ORDER BY i.id DESC LIMIT 200";
 $st=$db->prepare($sqlList); $st->execute($params);
@@ -296,23 +371,26 @@ if(isset($_GET['edit'])){
     grid-template-columns: repeat(12, 1fr);
     gap:8px; align-items:center;
   }
-  .filters .q   { grid-column: 1 / -1; }
-  .filters .cat { grid-column: 1 / -1; }
-  .filters .sub { grid-column: 1 / -1; }
-  .filters .go  { grid-column: 1 / -1; }
+  .filters .q        { grid-column: 1 / -1; }
+  .filters .cat      { grid-column: 1 / -1; }
+  .filters .sub      { grid-column: 1 / -1; }
+  .filters .subsub   { grid-column: 1 / -1; }
+  .filters .go       { grid-column: 1 / -1; }
 
   @media (min-width:640px){
-    .filters .q  { grid-column: 1 / -1; }
-    .filters .cat{ grid-column: 1 / 7; }
-    .filters .sub{ grid-column: 7 / -2; }
-    .filters .go { grid-column: -2 / -1; }
+    .filters .q    { grid-column: 1 / -1; }
+    .filters .cat  { grid-column: 1 / -1; }
+    .filters .sub  { grid-column: 1 / -1; }
+    .filters .subsub { grid-column: 1 / -1; }
+    .filters .go   { grid-column: 1 / -1; }
   }
 
   @media (min-width:920px){
-    .filters .q  { grid-column: 1 / 7; }
-    .filters .cat{ grid-column: 7 / 10; }
-    .filters .sub{ grid-column: 10 / 12; }
-    .filters .go { grid-column: 12 / 13; }
+    .filters .q      { grid-column: 1 / -1; }
+    .filters .cat    { grid-column: 1 / 5; }
+    .filters .sub    { grid-column: 5 / 9; }
+    .filters .subsub { grid-column: 9 / 12; }
+    .filters .go     { grid-column: 12 / 13; }
   }
 
   /* ===== Form Grid ===== */
@@ -351,7 +429,7 @@ if(isset($_GET['edit'])){
   }
   .table tbody tr > td:first-child{
     border-start-start-radius:12px; border-end-start-radius:12px; border-right:0;
-    position: sticky; inset-inline-start: 0; background: #fff; z-index: 1; /* sticky ID */
+    position: sticky; inset-inline-start: 0; background: #fff; z-index: 1;
   }
   .table tbody tr > td:last-child{
     border-start-end-radius:12px; border-end-end-radius:12px; border-left:0;
@@ -363,12 +441,10 @@ if(isset($_GET['edit'])){
   .alert-ok{ background:#ecfdf5; border:1px solid #c7f3e3; }
   .alert-err{ background:#fef2f2; border:1px solid #f9cccc; }
 
-  /* أزرار الإجراءات في الجدول مضغوطة وتتفك على الشاشات الصغيرة */
   .row-actions{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 
-  /* إخفاء أعمدة قليلة الأهمية على الشاشات الأصغر */
   @media (max-width:640px){
-    .col-image, .col-sku, .col-reorder, .col-sub { display:none; }
+    .col-image, .col-sku, .col-reorder, .col-sub, .col-subsub { display:none; }
     .btn{ padding:8px 12px; border-radius:10px; }
     .img-thumb{ width:40px; height:40px; }
   }
@@ -393,13 +469,15 @@ if(isset($_GET['edit'])){
     <select class="input sub" id="f_subcategory" name="subcategory_id" <?= $hasSubcatId? '':'disabled' ?>>
       <option value="">كل الفروع</option>
     </select>
+    <select class="input subsub" id="f_sub_subcategory" name="sub_subcategory_id" <?= $hasSubSubId? '':'disabled' ?>>
+      <option value="">كل الفرعي الفرعي</option>
+    </select>
     <button class="btn go">بحث</button>
   </form>
 
   <!-- Form -->
   <div class="card">
     <h3><?= $editing? 'تعديل صنف':'إضافة صنف' ?></h3>
-    <!-- مهم: enctype للرفع -->
     <form method="post" class="form-grid" enctype="multipart/form-data">
       <input type="hidden" name="action" value="<?= $editing? 'update':'create' ?>">
       <?php if($editing): ?><input type="hidden" name="id" value="<?=$editing['id']?>"><?php endif; ?>
@@ -429,8 +507,14 @@ if(isset($_GET['edit'])){
       <?php endif; ?>
 
       <?php if($hasPrice): ?>
-      <label>السعر
+      <label>السعر (فاتورة / بيع عادي)
         <input class="input" name="unit_price" type="number" step="0.01" value="<?=e($editing['unit_price'] ?? '')?>">
+      </label>
+      <?php endif; ?>
+
+      <?php if($hasWholesale): ?>
+      <label>سعر القطاعي / الأتاعة
+        <input class="input" name="price_wholesale" type="number" step="0.01" value="<?=e($editing['price_wholesale'] ?? '')?>">
       </label>
       <?php endif; ?>
 
@@ -465,6 +549,14 @@ if(isset($_GET['edit'])){
       </label>
       <?php endif; ?>
 
+      <?php if($hasSubSubId): ?>
+      <label>التصنيف الفرعي الفرعي
+        <select class="input" id="i_sub_subcategory" name="sub_subcategory_id">
+          <option value="">— بدون —</option>
+        </select>
+      </label>
+      <?php endif; ?>
+
       <div class="form-actions">
         <button class="btn" type="submit"><?= $editing? 'تحديث':'إضافة' ?></button>
         <?php if($editing): ?><a class="btn secondary" href="?">إلغاء</a><?php endif; ?>
@@ -482,10 +574,12 @@ if(isset($_GET['edit'])){
             <th>#</th><th>الاسم</th>
             <?php if($hasImage): ?><th class="col-image">صورة</th><?php endif; ?>
             <?php if($hasSKU): ?><th class="col-sku">SKU</th><?php endif; ?>
-            <?php if($hasPrice): ?><th class="col-price">السعر</th><?php endif; ?>
+            <?php if($hasPrice): ?><th class="col-price">السعر (فاتورة)</th><?php endif; ?>
+            <?php if($hasWholesale): ?><th class="col-wholesale">سعر قطاعي</th><?php endif; ?>
             <?php if($hasStock): ?><th class="col-stock">المخزون</th><?php endif; ?>
             <?php if($hasCatId): ?><th class="col-cat">التصنيف</th><?php endif; ?>
             <?php if($hasSubcatId): ?><th class="col-sub">الفرعي</th><?php endif; ?>
+            <?php if($hasSubSubId): ?><th class="col-subsub">الفرعي الفرعي</th><?php endif; ?>
             <?php if($hasReorder): ?><th class="col-reorder">حد إعادة الطلب</th><?php endif; ?>
             <th>إجراءات</th>
           </tr>
@@ -506,8 +600,22 @@ if(isset($_GET['edit'])){
                 </td>
               <?php endif; ?>
 
-              <?php if($hasSKU): ?><td class="col-sku"><?=e($it['sku'])?></td><?php endif; ?>
-              <?php if($hasPrice): ?><td class="col-price"><?= $it['unit_price']!==null ? number_format((float)$it['unit_price'],2) : '—' ?></td><?php endif; ?>
+              <?php if($hasSKU): ?>
+                <td class="col-sku"><?=e($it['sku'])?></td>
+              <?php endif; ?>
+
+              <?php if($hasPrice): ?>
+                <td class="col-price">
+                  <?= $it['unit_price']!==null ? number_format((float)$it['unit_price'],2) : '—' ?>
+                </td>
+              <?php endif; ?>
+
+              <?php if($hasWholesale): ?>
+                <td class="col-wholesale">
+                  <?= isset($it['price_wholesale']) ? number_format((float)$it['price_wholesale'],2) : '0.00' ?>
+                </td>
+              <?php endif; ?>
+
               <?php if($hasStock): ?>
                 <td class="col-stock">
                   <?php
@@ -519,9 +627,23 @@ if(isset($_GET['edit'])){
                   </span>
                 </td>
               <?php endif; ?>
-              <?php if($hasCatId): ?><td class="col-cat"><span class="pill"><?=e($it['category_name'] ?? '—')?></span></td><?php endif; ?>
-              <?php if($hasSubcatId): ?><td class="col-sub"><span class="pill"><?=e($it['subcategory_name'] ?? '—')?></span></td><?php endif; ?>
-              <?php if($hasReorder): ?><td class="col-reorder"><?= (int)($it['reorder_level'] ?? 0) ?></td><?php endif; ?>
+
+              <?php if($hasCatId): ?>
+                <td class="col-cat"><span class="pill"><?=e($it['category_name'] ?? '—')?></span></td>
+              <?php endif; ?>
+
+              <?php if($hasSubcatId): ?>
+                <td class="col-sub"><span class="pill"><?=e($it['subcategory_name'] ?? '—')?></span></td>
+              <?php endif; ?>
+
+              <?php if($hasSubSubId): ?>
+                <td class="col-subsub"><span class="pill"><?=e($it['sub_subcategory_name'] ?? '—')?></span></td>
+              <?php endif; ?>
+
+              <?php if($hasReorder): ?>
+                <td class="col-reorder"><?= (int)($it['reorder_level'] ?? 0) ?></td>
+              <?php endif; ?>
+
               <td>
                 <div class="row-actions">
                   <a class="btn" href="?edit=<?=$it['id']?>">تعديل</a>
@@ -562,25 +684,83 @@ async function fillSubcats(selectCat, selectSub, selectedId){
   }catch(e){}
 }
 
+/** تعبئة sub-sub */
+async function fillSubSubcats(selectSub, selectSubSub, selectedId){
+  const sid = selectSub.value || '';
+  selectSubSub.innerHTML = '';
+  const opt0 = document.createElement('option');
+  opt0.value = ''; opt0.textContent = sid ? '— اختر الفرعي الفرعي —' : '— بدون —';
+  selectSubSub.appendChild(opt0);
+  if(!sid){ return; }
+
+  try{
+    const res = await fetch(`?ajax=subsub&subcategory_id=${encodeURIComponent(sid)}`);
+    const data = await res.json();
+    data.forEach(ss=>{
+      const o=document.createElement('option');
+      o.value=ss.id; o.textContent=ss.name;
+      if(selectedId && String(selectedId)===String(ss.id)) o.selected=true;
+      selectSubSub.appendChild(o);
+    });
+  }catch(e){}
+}
+
 /** فلاتر أعلى القائمة */
-const fCat = document.getElementById('f_category');
-const fSub = document.getElementById('f_subcategory');
+const fCat    = document.getElementById('f_category');
+const fSub    = document.getElementById('f_subcategory');
+const fSubSub = document.getElementById('f_sub_subcategory');
 if(fCat && fSub){
-  fCat.addEventListener('change', ()=> fillSubcats(fCat, fSub, ''));
-  <?php if($sub && $cat): ?>
-    fillSubcats(fCat, fSub, <?=json_encode($sub)?>);
-  <?php else: ?>
-    if(fCat.value){ fillSubcats(fCat, fSub, ''); }
+  fCat.addEventListener('change', ()=>{
+    fillSubcats(fCat, fSub, '').then(()=>{
+      if(fSubSub){
+        fSubSub.innerHTML = '<option value="">— بدون —</option>';
+      }
+    });
+  });
+  if(fSubSub){
+    fSub.addEventListener('change', ()=> fillSubSubcats(fSub, fSubSub, ''));
+  }
+
+  <?php if($cat): ?>
+    // تهيئة الفلاتر مع القيم المختارة
+    fillSubcats(fCat, fSub, <?=json_encode($sub)?>).then(()=>{
+      <?php if($subsub): ?>
+        if(fSubSub){
+          fillSubSubcats(fSub, fSubSub, <?=json_encode($subsub)?>);
+        }
+      <?php endif; ?>
+    });
   <?php endif; ?>
 }
 
 /** نموذج الإضافة/التعديل */
-const iCat = document.getElementById('i_category');
-const iSub = document.getElementById('i_subcategory');
+const iCat    = document.getElementById('i_category');
+const iSub    = document.getElementById('i_subcategory');
+const iSubSub = document.getElementById('i_sub_subcategory');
+
 if(iCat && iSub){
-  iCat.addEventListener('change', ()=> fillSubcats(iCat, iSub, ''));
+  iCat.addEventListener('change', ()=>{
+    fillSubcats(iCat, iSub, '').then(()=>{
+      if(iSubSub){
+        iSubSub.innerHTML = '<option value="">— بدون —</option>';
+      }
+    });
+  });
+
+  if(iSubSub){
+    iSub.addEventListener('change', ()=> fillSubSubcats(iSub, iSubSub, ''));
+  }
+
   <?php if($editing && !empty($editing['category_id'])): ?>
-    fillSubcats(iCat, iSub, <?=json_encode((int)($editing['subcategory_id'] ?? 0))?>);
+    fillSubcats(iCat, iSub, <?=json_encode((int)($editing['subcategory_id'] ?? 0))?>).then(()=>{
+      <?php if($hasSubSubId): ?>
+        fillSubSubcats(
+          iSub,
+          iSubSub,
+          <?=json_encode((int)($editing['sub_subcategory_id'] ?? 0))?>
+        );
+      <?php endif; ?>
+    });
   <?php endif; ?>
 }
 </script>

@@ -29,7 +29,7 @@ $u = current_user();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- مهم للموبايل -->
-<title>POS — اختيار التصنيف</title>
+<title> اختيار التصنيف</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
 :root{
@@ -98,7 +98,7 @@ body{
 <body>
 
 <nav class="nav">
-  <div><strong>POS — صفحة 1: اختيار التصنيف</strong></div>
+  <div><strong>  صفحة 1: اختيار التصنيف</strong></div>
 
   <div class="right">
     <a href="/3zbawyh/public/cart_checkout.php">الكارت / الدفع</a>

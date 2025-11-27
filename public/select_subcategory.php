@@ -15,8 +15,14 @@ if (!isset($_SESSION['pos_flow']) || empty($_SESSION['pos_flow']['category_id'])
 
 if ($_SERVER['REQUEST_METHOD']==='POST') {
   $sid = isset($_POST['subcategory_id']) ? (int)$_POST['subcategory_id'] : 0;
+
+  // نحفظ الفرعي في الـ session
   $_SESSION['pos_flow']['subcategory_id'] = $sid ?: null;
-  header('Location: /3zbawyh/public/select_items.php'); exit;
+
+  // ✅ بدل ما نروح على الأصناف مباشرة
+  // نروح نختار الفرعي الفرعي الأول
+  header('Location: /3zbawyh/public/select_sub_subcategory.php');
+  exit;
 }
 
 $category_id = (int)$_SESSION['pos_flow']['category_id'];
@@ -27,7 +33,7 @@ $u = current_user();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- مهم للموبايل -->
-<title>POS — اختيار الفرعي</title>
+<title> اختيار الفرعي</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
 :root{--bg:#f6f7fb;--card:#fff;--bd:#e8e8ef;--pri:#2261ee;--pri-ink:#fff}
@@ -90,7 +96,7 @@ body{
 </head>
 <body>
 <nav class="nav">
-  <div><strong>POS — صفحة 2: اختيار الفرعي</strong></div>
+  <div><strong> صفحة 2: اختيار الفرعي</strong></div>
   <div class="right">
     <a href="/3zbawyh/public/select_category.php">← التصنيف</a>
     <a href="/3zbawyh/public/cart_checkout.php">الكارت / الدفع</a>

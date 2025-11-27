@@ -200,7 +200,7 @@ $customers = $db->query("SELECT id, ".(in_array('name',$cCols,true)?'name':(in_a
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <title>تقارير المبيعات — Summary</title>
+  <title>تقارير المبيعات  </title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body{background:#f6f7fb;color:#111;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Naskh Arabic",Tahoma,Arial}
@@ -227,7 +227,7 @@ $customers = $db->query("SELECT id, ".(in_array('name',$cCols,true)?'name':(in_a
 
   <div class="card" style="margin-bottom:12px">
     <div class="row" style="justify-content:space-between">
-      <h2 style="margin:0">تقارير المبيعات — Summary</h2>
+      <h2 style="margin:0">تقارير المبيعات  </h2>
       <div class="row">
         <a class="btn" href="/3zbawyh/public/invoices_details.php">صفحة الفواتير التفصيلية</a>
         <a class="btn" href="/3zbawyh/public/dashboard.php">عودة للوحة</a>
@@ -236,12 +236,7 @@ $customers = $db->query("SELECT id, ".(in_array('name',$cCols,true)?'name':(in_a
   </div>
 
   <!-- KPIs النهارده -->
-  <div class="grid cols-4">
-    <div class="kpi"><div class="h">عدد الفواتير — اليوم</div><div class="v"><?=nf($countToday)?></div></div>
-    <div class="kpi"><div class="h">إجمالي مبيعات اليوم</div><div class="v"><?=nf($totalToday)?> EGP</div></div>
-    <div class="kpi"><div class="h">الفترة المحددة — إجمالي</div><div class="v"><?=nf($totalSalesRange)?> EGP</div></div>
-    <div class="kpi"><div class="h">الفترة المحددة — عدد الفواتير</div><div class="v"><?=nf($countInvoicesRange)?></div></div>
-  </div>
+
 
   <!-- طرق الدفع النهارده -->
   <div class="grid cols-4" style="margin-top:12px">
@@ -280,6 +275,8 @@ $customers = $db->query("SELECT id, ".(in_array('name',$cCols,true)?'name':(in_a
       <div class="h"><span class="pill"><?=nf($payToday['other']['cnt'])?> فاتورة</span></div>
     </div>
     <?php endif; ?>
+          <div class="kpi"><div class="h">عدد الفواتير — اليوم</div><div class="v"><?=nf($countToday)?></div></div>
+    <div class="kpi"><div class="h">إجمالي مبيعات اليوم</div><div class="v"><?=nf($totalToday)?> EGP</div></div>
   </div>
 
   <!-- آخر 8 فواتير -->

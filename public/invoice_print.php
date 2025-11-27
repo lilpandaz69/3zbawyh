@@ -153,7 +153,7 @@ body{
   <!-- الهيدر -->
   <div class="header center">
     <div class="title">العزباوية</div>
-    <div class="small">شارع ...، القاهرة — 01000000000</div>
+    <div class="small">  <div>
     <div class="hr"></div>
 
     <div class="meta right">
@@ -235,14 +235,6 @@ body{
       <div class="row"><span>الباقي</span><span><?php echo nf($invoice['change_amount']); ?></span></div>
     <?php endif; ?>
   </div>
-
-  <div class="footer center">
-    <div class="hr"></div>
-    <div>شكراً لتسوقكم من العزباوية</div>
-    <div class="small">استبدال خلال 14 يوم مع الفاتورة</div>
-    <div class="cut-line"></div>
-  </div>
-
 </div>
 
 <!-- أدوات سريعة من المتصفح -->

@@ -6,21 +6,15 @@ class ItemsModel {
     public static function categories() {
         $db = db();
         try {
-            // Try with is_active column first
             $st = $db->query("SELECT id, name FROM categories WHERE is_active = 1 ORDER BY name");
             $result = $st->fetchAll();
-            if (!empty($result)) {
-                return $result;
-            }
-        } catch (Exception $e) {
-            // If is_active column doesn't exist, try without it
-        }
-        
+            if (!empty($result)) return $result;
+        } catch (Exception $e) {}
+
         try {
             $st = $db->query("SELECT id, name FROM categories ORDER BY name");
             return $st->fetchAll();
         } catch (Exception $e) {
-            // If categories table doesn't exist, return empty array
             return [];
         }
     }
@@ -37,10 +31,39 @@ class ItemsModel {
         }
     }
 
+    /** 
+     * 🔥 NEW: sub-sub-categories 
+     */
+    public static function subSubCategories($subcategory_id = null) {
+        $db = db();
+        if ($subcategory_id === null) {
+            $st = $db->query("SELECT id, name, subcategory_id FROM sub_subcategories ORDER BY name");
+            return $st->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $st = $db->prepare("SELECT id, name, subcategory_id FROM sub_subcategories WHERE subcategory_id = ? ORDER BY name");
+            $st->execute([$subcategory_id]);
+            return $st->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
 
+    /**
+     * رجوع صنف واحد بالأسعار
+     */
     public static function findById($id) {
         $db = db();
-        $st = $db->prepare("SELECT id, name, unit_price, stock FROM items WHERE id = ?");
+        $st = $db->prepare("
+            SELECT 
+                id, 
+                name, 
+                unit_price, 
+                price_wholesale, 
+                stock,
+                subcategory_id,
+                sub_subcategory_id,
+                category_id
+            FROM items 
+            WHERE id = ?
+        ");
         $st->execute([$id]);
         return $st->fetch(PDO::FETCH_ASSOC);
     }
@@ -49,13 +72,23 @@ class ItemsModel {
         return self::findById($id);
     }
 
-    public static function search(string $q = '', ?int $cat = null, ?int $sub = null, int $limit = 50) {
+    /**
+     * 🔥 Search شامل 3 مستويات تصنيفات
+     */
+    public static function search(string $q = '', ?int $cat = null, ?int $sub = null, ?int $subsub = null, int $limit = 50) {
         $db = db();
 
-        // ✅ تم حذف sku من الجدول
-        // نضيف NULL AS sku لتجنب أي خطأ من أكواد قديمة
         $sql = "
-            SELECT i.id, i.name, i.unit_price, i.stock, NULL AS sku
+            SELECT 
+                i.id, 
+                i.name, 
+                i.unit_price, 
+                i.price_wholesale,
+                i.stock, 
+                i.category_id,
+                i.subcategory_id,
+                i.sub_subcategory_id,
+                NULL AS sku
             FROM items i
             WHERE 1
         ";
@@ -77,6 +110,11 @@ class ItemsModel {
             $params[':sub'] = $sub;
         }
 
+        if ($subsub !== null) {
+            $sql .= " AND i.sub_subcategory_id = :subsub";
+            $params[':subsub'] = $subsub;
+        }
+
         $sql .= " ORDER BY i.name ASC LIMIT :limit";
         $st = $db->prepare($sql);
 
@@ -88,5 +126,4 @@ class ItemsModel {
         $st->execute();
         return $st->fetchAll(PDO::FETCH_ASSOC);
     }
-    
 }

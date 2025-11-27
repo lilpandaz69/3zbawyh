@@ -13,9 +13,8 @@ $msg = '';
 $err = '';
 
 function valid_phone($s){
-  // أرقام فقط + يسمح بـ + في البداية، طول من 7 لـ 15 رقم
   $s = trim($s);
-  if ($s === '') return true; // اختياري
+  if ($s === '') return false; // لازم رقم
   if (!preg_match('/^\+?\d{7,15}$/', $s)) return false;
   return true;
 }
@@ -26,8 +25,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $phone = trim($_POST['customer_phone'] ?? '');
 
   if ($act === 'save') {
+
     if ($name === '') {
-      $err = 'اكتب اسم العميل أو اختَر "تخطّي".';
+      $err = 'اسم العميل مطلوب.';
+    } elseif ($phone === '') {
+      $err = 'رقم الموبايل مطلوب.';
     } elseif (!valid_phone($phone)) {
       $err = 'صيغة رقم الموبايل غير صحيحة. مثال: 01012345678 أو +201012345678';
     } else {
@@ -36,11 +38,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $_SESSION['pos_flow']['customer_skipped'] = false;
       header('Location: /3zbawyh/public/select_category.php'); exit;
     }
-  } elseif ($act === 'skip') {
-    $_SESSION['pos_flow']['customer_name']    = '';
-    $_SESSION['pos_flow']['customer_phone']   = '';
-    $_SESSION['pos_flow']['customer_skipped'] = true;
-    header('Location: /3zbawyh/public/select_category.php'); exit;
   }
 }
 ?>
@@ -55,8 +52,6 @@ body { background: radial-gradient(1200px 600px at center, #f6f7fb, #e8eaf6); fo
 .card { background:#fff; padding:25px; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,0.05); }
 .btn { background:#2261ee; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-size:15px; }
 .btn:hover{ opacity:.9; }
-.btn.secondary{ background:#e8e8ef; color:#111; }
-.btn.ghost{ background:#fff; border:1px dashed #c9c9d6; color:#444; }
 .input{ width:100%; padding:10px 12px; border:1px solid #ccc; border-radius:6px; font-size:15px; }
 .row{ display:flex; gap:10px; }
 .row .col{ flex:1; }
@@ -70,7 +65,7 @@ body { background: radial-gradient(1200px 600px at center, #f6f7fb, #e8eaf6); fo
 <div class="container">
 
   <div class="card" style="max-width:520px; width:92%;">
-    <h2 style="margin-top:0; color:#111;">بيانات العميل (اختيارية)</h2>
+    <h2 style="margin-top:0; color:#111;">بيانات العميل</h2>
 
     <?php if($err): ?>
       <div class="badge"><?= htmlspecialchars($err) ?></div>
@@ -79,22 +74,21 @@ body { background: radial-gradient(1200px 600px at center, #f6f7fb, #e8eaf6); fo
     <form method="post" autocomplete="off">
       <div class="row" style="margin-bottom:12px;">
         <div class="col">
-          <label style="display:block; text-align:right; font-size:13px; margin-bottom:6px;">اسم العميل</label>
+          <label style="display:block; text-align:right; font-size:13px; margin-bottom:6px;">اسم العميل *</label>
           <input class="input" type="text" name="customer_name" placeholder="مثال: أحمد علي" autofocus
-                 value="<?= htmlspecialchars($_SESSION['pos_flow']['customer_name'] ?? '') ?>">
+                 value="<?= htmlspecialchars($_SESSION['pos_flow']['customer_name'] ?? '') ?>" required>
         </div>
         <div class="col">
-          <label style="display:block; text-align:right; font-size:13px; margin-bottom:6px;">موبايل</label>
+          <label style="display:block; text-align:right; font-size:13px; margin-bottom:6px;">موبايل *</label>
           <input class="input" type="text" name="customer_phone" placeholder="مثال: 01012345678 أو +201012345678"
-                 value="<?= htmlspecialchars($_SESSION['pos_flow']['customer_phone'] ?? '') ?>">
+                 value="<?= htmlspecialchars($_SESSION['pos_flow']['customer_phone'] ?? '') ?>" required>
         </div>
       </div>
 
-      <div class="help">تقدر تكتب الاسم ورقم الموبايل أو تضغط “تخطّي” وتكمّل بدون بيانات.</div>
+      <div class="help">يجب إدخال اسم العميل ورقم الموبايل للمتابعة.</div>
 
       <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center;">
         <button class="btn" type="submit" name="act" value="save">متابعة</button>
-        <button class="btn ghost" type="submit" name="act" value="skip">تخطّي بدون بيانات</button>
       </div>
     </form>
   </div>

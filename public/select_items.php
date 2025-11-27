@@ -3,9 +3,13 @@ require_once __DIR__ . '/../lib/auth.php';
 require_once __DIR__ . '/../lib/helpers.php';
 require_login();
 if (!isset($_SESSION['pos_flow'])) { $_SESSION['pos_flow'] = []; }
+
 $__customer_name    = $_SESSION['pos_flow']['customer_name']    ?? '';
 $__customer_phone   = $_SESSION['pos_flow']['customer_phone']   ?? '';
 $__customer_skipped = $_SESSION['pos_flow']['customer_skipped'] ?? false;
+
+// ✅ نوع السعر الحالي (جاي من order_type.php)
+$__sale_type = $_SESSION['pos_sale_type'] ?? 'normal';
 
 require_role_in_or_redirect(['admin','cashier','Manger']);
 
@@ -15,15 +19,22 @@ if (empty($_SESSION['pos_flow']['category_id'])) {
 if (empty($_SESSION['pos_flow']['subcategory_id'])) {
   header('Location: /3zbawyh/public/select_subcategory.php'); exit;
 }
-$category_id    = (int)$_SESSION['pos_flow']['category_id'];
-$subcategory_id = (int)$_SESSION['pos_flow']['subcategory_id'];
+if (empty($_SESSION['pos_flow']['sub_subcategory_id'])) {
+  // لو حابب تخلي sub-sub اختياري، شيل السطرين دول
+  header('Location: /3zbawyh/public/select_sub_subcategory.php'); exit;
+}
+
+$category_id       = (int)$_SESSION['pos_flow']['category_id'];
+$subcategory_id    = (int)$_SESSION['pos_flow']['subcategory_id'];
+$sub_subcategory_id= (int)$_SESSION['pos_flow']['sub_subcategory_id'];
+
 $u = current_user();
 ?>
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"> <!-- مهم للموبايل -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>POS — الأصناف</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
@@ -46,7 +57,7 @@ a{color:var(--pri)}
 .nav{
   position:sticky; top:0; z-index:10;
   display:flex; justify-content:space-between; align-items:center;
-  padding:12px 14px; gap:10px; flex-wrap:wrap;      /* يلف على الموبايل */
+  padding:12px 14px; gap:10px; flex-wrap:wrap;
   background:linear-gradient(#ffffffdd,#ffffffcc);
   backdrop-filter: blur(6px); border-bottom:1px solid var(--bd);
 }
@@ -70,7 +81,7 @@ a{color:var(--pri)}
   padding:10px 14px; border-radius:12px; cursor:pointer; transition:.15s; box-shadow:0 2px 8px rgba(34,97,238,.18)
 }
 .btn:hover{transform:translateY(-1px)}
-.btn.secondary{background:#eef3fb; color:var(--accent)}
+.btn.secondary{background:#eef3fb; color:#0b4ea9}
 .badge{font-size:11px; padding:2px 8px; border-radius:999px; background:var(--badge); color:#345}
 .pill{display:inline-block; background:#0b4ea914; border:1px solid #cfe2ff; color:#0b4ea9; padding:4px 10px; border-radius:999px; font-weight:600}
 
@@ -86,6 +97,7 @@ a{color:var(--pri)}
 .card .name{font-weight:700; margin-bottom:2px}
 .card .meta{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px}
 .price-badge{font-size:13px; padding:4px 10px; border-radius:999px; background:#eef6ff; color:#0b4ea9; font-weight:700}
+.price-note{font-size:11px; color:#666; margin-top:2px}
 .stock-badge{font-size:13px; padding:4px 10px; border-radius:999px; background:#f6f6f6; color:#333; font-weight:700}
 .stock-low{color:#b3261e !important; background:#fdecec !important}
 
@@ -152,7 +164,7 @@ a{color:var(--pri)}
   .nav{padding:10px}
   .box{width:100%; border-radius:12px; padding:12px}
   .row{gap:8px}
-  .input{min-width:0; width:100%}          /* حقل البحث ياخد العرض كله */
+  .input{min-width:0; width:100%}
   .btn{width:auto}
   .list{grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px}
   .thumb{height:120px}
@@ -162,7 +174,7 @@ a{color:var(--pri)}
 @media (max-width: 380px){
   .list{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
   .fab{
-    inset-inline-start:50%; transform:translateX(-50%);  /* وسّط زر الكارت */
+    inset-inline-start:50%; transform:translateX(-50%);
     inset-inline-end:auto;
   }
 }
@@ -170,11 +182,19 @@ a{color:var(--pri)}
 </head>
 <body>
 <nav class="nav">
-  <div><strong>POS — صفحة الأصناف</strong></div>
+  <div><strong> صفحة الأصناف</strong></div>
   <div class="right">
     <span class="pill">التصنيف: <span id="catName">#<?=$category_id?></span></span>
     <span class="pill">الفرعي: <span id="subName">#<?=$subcategory_id?></span></span>
-    <a class="btn secondary" href="/3zbawyh/public/select_subcategory.php">← الفرعي</a>
+    <span class="pill">الفرعي الفرعي: <span id="subSubName">#<?=$sub_subcategory_id?></span></span>
+
+    <!-- ✅ توضيح نوع السعر الحالي -->
+    <span class="pill" style="background:#e8f5e9;border-color:#c8e6c9;color:#1b5e20">
+      نوع السعر:
+      <?= $__sale_type === 'wholesale' ? 'قطاعي ' : 'فاتورة عادية' ?>
+    </span>
+
+    <a class="btn secondary" href="/3zbawyh/public/select_sub_subcategory.php">← الفرعي الفرعي</a>
     <a class="btn" href="/3zbawyh/public/cart_checkout.php" id="cartBtnTop">الكارت (0)</a>
     <a href="/3zbawyh/public/logout.php">خروج (<?=e($u['username'])?>)</a>
   </div>
@@ -211,12 +231,21 @@ a{color:var(--pri)}
 </a>
 
 <script>
-const cid = <?=$category_id?>, sid = <?=$subcategory_id?>;
+const cid  = <?=$category_id?>;
+const sid  = <?=$subcategory_id?>;
+const ssid = <?=$sub_subcategory_id?>;
+
+// ✅ نوع السعر في الجافاسكربت
+const SALE_TYPE = <?= json_encode($__sale_type === 'wholesale' ? 'wholesale' : 'normal') ?>;
+
 const el = s=>document.querySelector(s);
 const fmt = n=>{ n=parseFloat(n||0); return isNaN(n)?'0.00':n.toFixed(2); };
 
 /* API */
-function api(a,p={}){const q=new URLSearchParams(p).toString();return fetch('/3zbawyh/public/pos_api.php?'+(q? q+'&':'')+'action='+a).then(r=>r.json());}
+function api(a,p={}){
+  const q=new URLSearchParams(p).toString();
+  return fetch('/3zbawyh/public/pos_api.php?'+(q? q+'&':'')+'action='+a).then(r=>r.json());
+}
 function postForm(a, body={}) {
   return fetch('/3zbawyh/public/pos_api.php?action='+a, {
     method:'POST',
@@ -239,15 +268,51 @@ function toast({title='تم', msg='', ok=false, timeout=2200}={}){
   `;
   t.querySelector('.t-close').onclick = ()=> t.remove();
   wrap.appendChild(t);
-  setTimeout(()=>{ t.style.opacity='.0'; t.style.transform='translateY(-6px)'; setTimeout(()=>t.remove(), 180); }, timeout);
+  setTimeout(()=>{
+    t.style.opacity='.0';
+    t.style.transform='translateY(-6px)';
+    setTimeout(()=>t.remove(), 180);
+  }, timeout);
 }
 
 /* Breadcrumb names */
-api('search_categories').then(r=>{ if(r?.ok){ const c=(r.categories||[]).find(x=>+x.id===cid); if(c) el('#catName').textContent=c.name; }});
-api('search_subcategories',{category_id:cid}).then(r=>{ if(r?.ok){ const s=(r.subcategories||[]).find(x=>+x.id===sid); if(s) el('#subName').textContent=s.name; }});
+api('search_categories').then(r=>{
+  if(r?.ok){
+    const c=(r.categories||[]).find(x=>+x.id===cid);
+    if(c) el('#catName').textContent=c.name;
+  }
+});
+api('search_subcategories',{category_id:cid}).then(r=>{
+  if(r?.ok){
+    const s=(r.subcategories||[]).find(x=>+x.id===sid);
+    if(s) el('#subName').textContent=s.name;
+  }
+});
+
+// ✅ اسم sub-sub-category (لازم يكون عندك action اسمه search_sub_subcategories في pos_api)
+api('search_sub_subcategories',{subcategory_id:sid}).then(r=>{
+  if(r?.ok){
+    const s=(r.sub_subcategories||[]).find(x=>+x.id===ssid);
+    if(s) el('#subSubName').textContent=s.name;
+  }
+}).catch(()=>{});
 
 /* Img field */
 function getItemImage(it){ return it.image_url || it.photo || it.image || ''; }
+
+/* ✅ Helper لاختيار السعر المعروض حسب نوع البيع */
+function getDisplayPrice(it) {
+  const base = parseFloat(it.unit_price ?? 0) || 0;
+  const wholesale = parseFloat(it.price_wholesale ?? 0) || 0;
+
+  if (SALE_TYPE === 'wholesale') {
+    // جملة / أتاعة
+    if (wholesale > 0) return wholesale;
+    return base;
+  }
+  // فاتورة عادية
+  return base;
+}
 
 /* Render */
 function renderItems(items){
@@ -261,6 +326,10 @@ function renderItems(items){
     const stock = (it.stock==null || it.stock==='') ? '-' : it.stock;
     const low = (stock!== '-' && parseFloat(stock)<=0);
     const img = getItemImage(it);
+
+    const displayPrice = getDisplayPrice(it);
+    const hasWholesale = it.price_wholesale !== undefined && it.price_wholesale !== null && parseFloat(it.price_wholesale) > 0;
+
     const d = document.createElement('div');
     d.className='card';
     d.innerHTML = `
@@ -268,9 +337,19 @@ function renderItems(items){
         ${img ? `<img src="${img}" loading="lazy" alt="">` : `<small>لا توجد صورة</small>`}
       </div>
       <div class="name" title="${it.name||''}">${it.name||''}</div>
-      <div class="meta">
-        <span class="price-badge">السعر: ${fmt(it.unit_price)} ج.م</span>
-        <span class="stock-badge ${low?'stock-low':''}">المخزون: ${stock}</span>
+      <div class="meta" style="flex-direction:column;align-items:flex-start">
+        <div>
+          <span class="price-badge">
+            السعر الحالي: ${fmt(displayPrice)} ج.م
+            ${SALE_TYPE === 'wholesale' ? ' (قطاعي)' : ' (فاتورة)'}
+          </span>
+          <span class="stock-badge ${low?'stock-low':''}">المخزون: ${stock}</span>
+        </div>
+        ${hasWholesale ? `
+          <div class="price-note">
+            سعر الفاتورة: ${fmt(it.unit_price)} ج.م
+            — سعر الأتاعة: ${fmt(it.price_wholesale)} ج.م
+          </div>` : ''}
       </div>
       <div class="actions">
         <div style="display:flex; align-items:center; gap:8px">
@@ -291,11 +370,16 @@ function renderItems(items){
   // Quantity controls
   grid.querySelectorAll('.qty').forEach(box=>{
     const val = box.querySelector('.val');
-    box.querySelector('.inc').addEventListener('click', ()=>{ val.value = Math.max(1, (+val.value||1)+1); });
-    box.querySelector('.dec').addEventListener('click', ()=>{ val.value = Math.max(1, (+val.value||1)-1); });
+    box.querySelector('.inc').addEventListener('click', ()=>{
+      val.value = Math.max(1, (+val.value||1)+1);
+    });
+    box.querySelector('.dec').addEventListener('click', ()=>{
+      val.value = Math.max(1, (+val.value||1)-1);
+    });
     val.addEventListener('keydown', e=>{
       if(e.key==='Enter'){
-        const id = +box.dataset.id; const qty = Math.max(1, parseInt(val.value||'1',10));
+        const id = +box.dataset.id;
+        const qty = Math.max(1, parseInt(val.value||'1',10));
         addToCart(id, qty, e.target.closest('.card').querySelector('.add-btn'));
       }
     });
@@ -313,6 +397,7 @@ function renderItems(items){
 }
 
 function addToCart(id, qty, btnEl){
+  // ✅ مش محتاج نبعت نوع السعر، الـ API بياخده من الـ Session
   postForm('cart_add', {item_id:id, qty:qty}).then(res=>{
     if(!res.ok){ alert(res.error||'خطأ'); return; }
     refreshCartCount();
@@ -326,7 +411,12 @@ function addToCart(id, qty, btnEl){
 
 function searchItems(){
   const q = el('#q').value.trim();
-  api('search_items',{q, category_id: cid, subcategory_id: sid}).then(r=>{
+  api('search_items',{
+    q,
+    category_id: cid,
+    subcategory_id: sid,
+    sub_subcategory_id: ssid    // ✅ عشان يتفلتر بالفرعي الفرعي كمان
+  }).then(r=>{
     if(!r.ok){ alert(r.error||'خطأ'); return; }
     renderItems(r.items||[]);
   });
@@ -347,6 +437,12 @@ function refreshCartCount(){
 /* Init */
 searchItems();
 refreshCartCount();
+
+/* بحث بالزر و Enter */
+document.getElementById('btnSearch').addEventListener('click', searchItems);
+document.getElementById('q').addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); searchItems(); }
+});
 </script>
 </body>
 </html>

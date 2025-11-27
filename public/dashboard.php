@@ -166,7 +166,7 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
       <span>العزباوية</span>
     </div>
     <ul>
-      <li><a href="/3zbawyh/public/customer_name.php">نقطة البيع (POS)</a></li>
+      <li><a href="/3zbawyh/public/order_type.php">نقطة البيع </a></li>
       <li><a href="/3zbawyh/public/logout.php">خروج (<?=e($u['username'])?>)</a></li>
     </ul>
   </nav>
@@ -196,12 +196,12 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
     <!-- ملخص اليوم: إجمالي النقدي + إجمالي الفواتير اليوم -->
     <div class="card kpi hover">
       <div class="row">
-        <div class="label"> fawtyr</div>
+        <div class="label"> فواتير</div>
         <div class="icon" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M6 7h12M6 12h12M6 17h12" stroke="currentColor" stroke-width="1.5"/></svg>
         </div>
       </div>
-      <div class="value"><?=nf($todayInvoices)?> <span class="muted" style="font-size:12px">EGP</span></div>
+      <div class="value"><?=nf($todayInvoices)?> <span class="muted" style="font-size:12px"></span></div>
 
     </div>
   </div>
@@ -222,8 +222,8 @@ $latestInvoices = safe_fetch(function() use($db,$dateCol,$LINE_TOT,$CUSTOMER_NAM
         <div class="muted">إدارة وربط بتصنيف</div>
       </a>
       <a class="qcard" href="/3zbawyh/public/users.php">
-        <strong>Users Management</strong>
-        <div class="muted">To manage users and cashers</div>
+        <strong>إدارة المستخدمين</strong>
+        <div class="muted">لإدارة المستخدمين والمحاسبين</div>
       </a>
     </div>
 

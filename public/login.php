@@ -7,7 +7,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     $ok = login($_POST['username'] ?? '', $_POST['password'] ?? '');
     if ($ok) {
         if (is_cashier()) {
-            header('Location: /3zbawyh/public/customer_name.php');
+            header('Location: /3zbawyh/public/order_type.php');
         } else {
             header('Location: /3zbawyh/public/dashboard.php');
         }

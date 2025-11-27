@@ -17,7 +17,7 @@ $u = current_user();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"> <!-- مهم للموبايل -->
-<title>POS — Cart Checkout</title>
+<title>نقاط البيع - دفع عربة التسوق</title>
 <link rel="stylesheet" href="/3zbawyh/assets/style.css">
 <style>
 :root{
@@ -351,7 +351,7 @@ function summarizeForSave(pays){
   const sumBy = { cash:0, visa:0, instapay:0, vodafone_cash:0, agyl:0 };
   for (const p of validPays) {
     if (sumBy.hasOwnProperty(p.method)) sumBy[p.method] += (+p.amount || 0);
-  }
+  } 
 
   if (validPays.length === 0) {
     return { save_payment_method: 'cash', payment_note: 'no payments' };
